@@ -61,6 +61,7 @@ void add_cluster(temp_file * file_so_far, int cluster_num);
 void load_curr_directory(int dir_start, int first, int size);
 void get_current_dir_list(char * directory);
 temp_file * get_file(char * source, int fat_start);
+int read_int(int num_bytes, int offset, char * source);
 void initilize(char * file_path)
 {
 
@@ -84,23 +85,26 @@ void initilize(char * file_path)
 	info.BPB_NumFATS = read_int(1, 16, file_map);
 	info.BPB_FATSz32 = read_int(4, 36, file_map);
 	info.cluster_size = info.BPB_SecPerClus * info.BPB_BytesPerSec;
-	info.first_cluster = info.BPB_BytesPerSec * (info.BPB_RsvdSecCnt + (info.BPB_NumFATS * info.BPB_FATSz32) + 0);
+	info.first_cluster = info.BPB_BytesPerSec * (info.BPB_RsvdSecCnt) + (info.BPB_NumFATS * info.BPB_FATSz32) + 0;
 	//reading the first cluster of root directory and loading as current directory
 	load_curr_directory(read_int(4, 44, file_map), True, 0);  
 }
 void load_curr_directory(int dir_start, int first, int size)
 {
-	int number_of_files = DEFAULT_NUM_FILES;
 	if(!first)
 	{
 		//free stuff
-		number_of_files = size / 32;
+		// number_of_files = size / 32;
 	}
 	else{
 
 	}
 	//extra one for null terminator
+	printf("%d\n", dir_start);
+	scanf("%d", &dir_start);
 	curr_dir.directory = get_file(file_map, dir_start);
+	int number_of_files = 16 * curr_dir.directory->num_clusters;
+	fprintf(stderr, "%d\n", read_int(4, 0,curr_dir.directory->meat));
 	curr_dir.file_names = calloc(number_of_files, sizeof(char *) + sizeof(char)* 12);
 	curr_dir.file_names[0] = "testdigjsxi";
 	curr_dir.file_names[1] = "testdigjsli";
@@ -185,15 +189,18 @@ temp_file * initilize_temp_file()
 	temp_file * temp = calloc(1, sizeof(temp_file));
 	temp->meat = calloc(info.cluster_size * INITIAL_FILE_SIZE, sizeof(char));
 	temp->pointer = 0;
+	temp->num_clusters = 0;
 	temp->size = INITIAL_FILE_SIZE;
 
 	return temp;
 }
 void add_cluster(temp_file * file_so_far, int cluster_num)
 {
+	printf("cluster read from 0x%x--%d--first cluster is 0x%x--\n", info.first_cluster + ((cluster_num) * info.cluster_size), info.first_cluster + ((cluster_num) * info.cluster_size), info.first_cluster);
 	memcpy(&file_so_far->meat[file_so_far->pointer], &file_map[info.first_cluster + ((cluster_num) * info.cluster_size)], info.cluster_size);
 	//growing the arraylist
 	file_so_far->pointer++;
+	file_so_far->num_clusters++;
 	if (file_so_far->pointer >= file_so_far->size)
 	{
 		file_so_far->size *= 2;
@@ -229,7 +236,10 @@ int main(int argc, char *argv[])
 		}
 
 		else if(strncmp(cmd_line,"open",4)==0) {
-			printf("Going to open!\n");
+			int temp_int;
+			scanf("%x", &temp_int);
+			temp_file * temp = get_file(file_map , temp_int);	
+			printf("%s 0x%x %d\n", temp->meat, read_int(4, 0, temp->meat), read_int(4, 0, temp->meat));
 		}
 
 		else if(strncmp(cmd_line,"close",5)==0) {
