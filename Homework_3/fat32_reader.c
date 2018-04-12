@@ -48,7 +48,8 @@ typedef struct temp_file{
 fat_info info;
 typedef struct current_directery{
 	temp_file * directory;
-	int * file_start_locations;
+	//if I look at file_offsets[x] it will tell me where the file named file_names[x] starts in the directory above
+	int * file_offsets;//cluster number of the start of the file names in the corrisponding spot in the next array 
 	char ** file_names;
 }current_directery;
 static current_directery curr_dir;
@@ -89,6 +90,7 @@ void initilize(char * file_path)
 	//reading the first cluster of root directory and loading as current directory
 	load_curr_directory(read_int(4, 44, file_map), True, 0);  
 }
+//loads current directory into curr_dir
 void load_curr_directory(int dir_start, int first, int size)
 {
 	if(!first)
@@ -103,11 +105,16 @@ void load_curr_directory(int dir_start, int first, int size)
 	printf("%d\n", dir_start);
 	scanf("%d", &dir_start);
 	curr_dir.directory = get_file(file_map, dir_start);
-	int number_of_files = 16 * curr_dir.directory->num_clusters;
+	int number_of_files = (info.cluster_size/32) * curr_dir.directory->num_clusters;
 	fprintf(stderr, "%d\n", read_int(4, 0,curr_dir.directory->meat));
 	curr_dir.file_names = calloc(number_of_files, sizeof(char *) + sizeof(char)* 12);
-	curr_dir.file_names[0] = "testdigjsxi";
-	curr_dir.file_names[1] = "testdigjsli";
+	curr_dir.file_offsets = calloc(number_of_files, sizeof(int));
+	int have_more = True;
+	int file_location = 0;
+	while(file_location <= curr_dir.directory->pointer * info.cluster_size)
+	{
+		
+	}
 }
 int read_int(int num_bytes, int offset, char * source)
 {
