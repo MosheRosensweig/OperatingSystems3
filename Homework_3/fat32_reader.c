@@ -85,7 +85,7 @@ void initilize(char * file_path)
 	info.BPB_NumFATS = read_int(1, 16, file_map);
 	info.BPB_FATSz32 = read_int(4, 36, file_map);
 	info.cluster_size = info.BPB_SecPerClus * info.BPB_BytesPerSec;
-	info.first_cluster = info.BPB_BytesPerSec * (info.BPB_RsvdSecCnt) + (info.BPB_NumFATS * info.BPB_FATSz32) + 0;
+	info.first_cluster = info.BPB_BytesPerSec * (info.BPB_RsvdSecCnt + info.BPB_NumFATS * info.BPB_FATSz32) + 0;
 	//reading the first cluster of root directory and loading as current directory
 	load_curr_directory(read_int(4, 44, file_map), True, 0);  
 }
@@ -162,8 +162,10 @@ temp_file * get_file(char * source, int fat_start)
 	int next_cluster = fat_start;
 	int fat_beginning = info.BPB_RsvdSecCnt * info.BPB_BytesPerSec;
 	//while we have a valid next cluster
+	//traverse the fat, getting data as we go
 	while(next_cluster && 2 <= next_cluster && next_cluster <= 0x0FFFFFEF ){
 		add_cluster(new_file, next_cluster);
+		printf("this is pointer %lu this is size %lu this is num_clusters %d\n", new_file->pointer, new_file->size, new_file->num_clusters);
 		//might be an off by one error
 		//maybe print whole table
 		next_cluster = (read_int(4, next_cluster * 4 + fat_beginning, source) & 0x0FFFFFFF);
@@ -195,12 +197,15 @@ temp_file * initilize_temp_file()
 	return temp;
 }
 void add_cluster(temp_file * file_so_far, int cluster_num)
-{
-	printf("cluster read from 0x%x--%d--first cluster is 0x%x--\n", info.first_cluster + ((cluster_num) * info.cluster_size), info.first_cluster + ((cluster_num) * info.cluster_size), info.first_cluster);
-	memcpy(&file_so_far->meat[file_so_far->pointer], &file_map[info.first_cluster + ((cluster_num) * info.cluster_size)], info.cluster_size);
+{ 
+	//first cluster is called cluster 2
+	//printf("cluster read from 0x%x--%d--first cluster is 0x%x--\n", info.first_cluster + ((cluster_num - 2) * info.cluster_size), info.first_cluster + ((cluster_num - 2) * info.cluster_size), info.first_cluster);
+	memcpy(&file_so_far->meat[file_so_far->pointer * info.cluster_size], &file_map[info.first_cluster + ((cluster_num - 2) * info.cluster_size)], info.cluster_size);
 	//growing the arraylist
+	
 	file_so_far->pointer++;
 	file_so_far->num_clusters++;
+	//printf("%s\n", &file_map[info.first_cluster + ((cluster_num - 2) * info.cluster_size)]);
 	if (file_so_far->pointer >= file_so_far->size)
 	{
 		file_so_far->size *= 2;

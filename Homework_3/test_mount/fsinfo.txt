@@ -1,0 +1,9 @@
+mkfs.vfat 3.0.16 (01 Mar 2013)
+fat32.img2 has 64 heads and 32 sectors per track,
+logical sector size is 512,
+using 0xf8 media descriptor, with 131072 sectors;
+file system has 2 32-bit FATs and 1 sector per cluster.
+FAT size is 1009 sectors, and provides 129022 clusters.
+There are 32 reserved sectors.
+Volume ID is 3cfc30d2, volume label CHUCKLES   .
+
