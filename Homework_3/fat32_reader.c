@@ -103,17 +103,32 @@ void load_curr_directory(int dir_start, int first, int size)
 	}
 	//extra one for null terminator
 	printf("%d\n", dir_start);
-	scanf("%d", &dir_start);
 	curr_dir.directory = get_file(file_map, dir_start);
 	int number_of_files = (info.cluster_size/32) * curr_dir.directory->num_clusters;
-	fprintf(stderr, "%d\n", read_int(4, 0,curr_dir.directory->meat));
+	//fprintf(stderr, "%d\n", read_int(1, 0,curr_dir.directory->meat));
 	curr_dir.file_names = calloc(number_of_files, sizeof(char *) + sizeof(char)* 12);
 	curr_dir.file_offsets = calloc(number_of_files, sizeof(int));
-	int have_more = True;
-	int file_location = 0;
-	while(file_location <= curr_dir.directory->pointer * info.cluster_size)
+	// int have_more = True;
+	for (int file_location = 0; file_location <= curr_dir.directory->pointer; file_location += 32)
 	{
-		
+		//checking if it is deleted
+		printf("looking at location %d\n", file_location);
+		int first_char = 0;
+		first_char = curr_dir.directory->meat[file_location] & 0xFF;
+		printf("%x\n", first_char);
+		//ignore deleted files
+		if (first_char == 0xE5){
+				printf("%s\n", "deleted");
+				continue;
+		}
+		int atribute = curr_dir.directory->meat[file_location + 11] & 0xFF;
+		//skip long names
+		if (atribute == 0x0F){
+			printf("long name\n");
+			continue;
+		}
+		file_location += 32;
+		}
 	}
 }
 int read_int(int num_bytes, int offset, char * source)
@@ -199,7 +214,7 @@ temp_file * initilize_temp_file()
 	temp->meat = calloc(info.cluster_size * INITIAL_FILE_SIZE, sizeof(char));
 	temp->pointer = 0;
 	temp->num_clusters = 0;
-	temp->size = INITIAL_FILE_SIZE;
+	temp->size = INITIAL_FILE_SIZE * info.cluster_size;
 
 	return temp;
 }
@@ -207,17 +222,17 @@ void add_cluster(temp_file * file_so_far, int cluster_num)
 { 
 	//first cluster is called cluster 2
 	//printf("cluster read from 0x%x--%d--first cluster is 0x%x--\n", info.first_cluster + ((cluster_num - 2) * info.cluster_size), info.first_cluster + ((cluster_num - 2) * info.cluster_size), info.first_cluster);
-	memcpy(&file_so_far->meat[file_so_far->pointer * info.cluster_size], &file_map[info.first_cluster + ((cluster_num - 2) * info.cluster_size)], info.cluster_size);
+	memcpy(&file_so_far->meat[file_so_far->pointer], &file_map[info.first_cluster + ((cluster_num - 2) * info.cluster_size)], info.cluster_size);
 	//growing the arraylist
 	
-	file_so_far->pointer++;
+	file_so_far->pointer += info.cluster_size;
 	file_so_far->num_clusters++;
 	//printf("%s\n", &file_map[info.first_cluster + ((cluster_num - 2) * info.cluster_size)]);
 	if (file_so_far->pointer >= file_so_far->size)
 	{
 		file_so_far->size *= 2;
-		file_so_far->meat = realloc(file_so_far->meat, file_so_far->size * info.cluster_size);
-		memset(file_so_far->meat + file_so_far->pointer * info.cluster_size, 0, (file_so_far->size - file_so_far->pointer) * info.cluster_size);
+		file_so_far->meat = realloc(file_so_far->meat, file_so_far->size);
+		memset(file_so_far->meat + file_so_far->pointer, 0, (file_so_far->size - file_so_far->pointer));
 	}
 }
 int main(int argc, char *argv[])
