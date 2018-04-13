@@ -36,4 +36,4 @@ We borrowed a few lines of code from the internet.
 	
 	[b] find file size: https://stackoverflow.com/questions/238603/how-can-i-get-a-files-size-in-c
 	
-Other than that, we used the fat spec, paying attention in class, and wikipedia to know how to write the code.
+Other than that, we used the fat spec, paying attention in class, and wikipedia to know how to write the code. 
