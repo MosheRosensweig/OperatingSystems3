@@ -390,7 +390,13 @@ void print_stat(char * dir_name)
 int main(int argc, char *argv[])
 {
 	char cmd_line[MAX_CMD];
-	char * file_path = "./fat32.img";
+	char * file_path;
+	if(argc > 1){
+		file_path = argv[1];
+	}
+	else{
+		file_path = "./fat32.img";
+	}
 	initilize(file_path);
 	read_int(2, 11, file_map);
 	/* Parse args and open our image file */
