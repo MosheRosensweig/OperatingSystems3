@@ -351,6 +351,42 @@ void add_cluster(temp_file * file_so_far, int cluster_num)
 		memset(file_so_far->meat + file_so_far->pointer, 0, (file_so_far->size - file_so_far->pointer));
 	}
 }
+void print_stat(char * dir_name)
+{
+	int dir_to_stat;
+	dir_to_stat = get_file_from_name(dir_name);
+	if(dir_to_stat < 0)
+	{
+		printf("Error: file/directory does not exist\n");
+		return;
+	}
+	int * size = (int*)&curr_dir.directory->meat[dir_to_stat + 28];
+	int next_clus_num = get_file_start(dir_to_stat, curr_dir);
+	int attr = curr_dir.directory->meat[dir_to_stat + 11] & 0xFF;
+	printf("Size is %d\n", *size);
+	printf("Attributes");
+	if(attr & 0x01){
+		printf(" ATTR_READ_ONLY");
+	}
+	if(attr & 0x02){
+		printf(" ATTR_HIDDEN");
+	}
+	if(attr & 0x04){
+		printf(" ATTR_SYSTEM");
+	}
+	if(attr & 0x08){
+		printf(" ATTR_VOLUME_ID");
+	}
+	if(attr & 0x10){
+		printf(" ATTR_DIRECTORY");
+	}
+	if(attr & 0x20){
+		printf(" ATTR_ARCHIVE");
+	}
+	printf("\n");	
+	printf("Next cluster number is 0x%x\n", next_clus_num);
+	
+}
 int main(int argc, char *argv[])
 {
 	char cmd_line[MAX_CMD];
@@ -401,7 +437,9 @@ int main(int argc, char *argv[])
 			//printf("file offset is :%d", get_file_from_name(&cmd_line[2]));
 			ls(&cmd_line[2]);
 		}
-
+		else if(strncmp(cmd_line,"stat",4)==0) {
+			print_stat(&cmd_line[4]);
+		}
 		else if(strncmp(cmd_line,"read",4)==0) {
 			printf("Going to read!\n");
 		}
