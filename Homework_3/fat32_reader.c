@@ -76,8 +76,6 @@ int get_file_start(int dir_location, loaded_directory dir);
 void clean_name(char * name_to_clean);
 void initilize(char * file_path)
 {
-
-
 	int fd;
 	//used https://www.linuxquestions.org/questions/programming-9/mmap-tutorial-c-c-511265/
 	fd = open(file_path, O_RDONLY);
@@ -89,7 +87,6 @@ void initilize(char * file_path)
 	//used https://stackoverflow.com/questions/238603/how-can-i-get-a-files-size-in-c
 	fseek(fp, 0, SEEK_END);
 	int sz = ftell(fp);
-	fprintf(stderr, "file size is %d bytes\n", sz);
 	file_map = mmap(0, sz, PROT_READ, MAP_SHARED, fd, 0);
 	info.BPB_BytesPerSec = read_int(2, 11, file_map);
 	info.BPB_SecPerClus = read_int(1, 13, file_map);
@@ -107,12 +104,10 @@ loaded_directory load_directory(int dir_start)
 	loaded_directory to_load;
 	
 	//extra one for null terminator
-	printf("%d\n", dir_start);
 	to_load.directory = get_file(file_map, dir_start);
 	// this is how many files can fit in the number of clusters we have
 	//leave one extra space for null termination
 	int number_of_files = (info.cluster_size/32) * to_load.directory->num_clusters + 1;
-	//fprintf(stderr, "%d\n", read_int(1, 0,curr_dir.directory->meat));
 	//not 100% sure why this works
 	to_load.file_names = calloc(number_of_files, sizeof(char) * NAME_SIZE -sizeof(char)+ sizeof(char*));
 	to_load.file_offsets = calloc(number_of_files, sizeof(int));
@@ -123,19 +118,15 @@ loaded_directory load_directory(int dir_start)
 		//make sure the file name list is null terminated i.e. when we read a string name that starts with a null, it's the end
 		to_load.file_names[file_location/32* NAME_SIZE] = '\0';
 		//checking if it is deleted
-		printf("looking at location %d\n", file_location);
 		int first_char = 0;
 		first_char = to_load.directory->meat[file_location] & 0xFF;
-		printf("%x\n", first_char);
 		//ignore deleted files
 		if (first_char == 0xE5){
-				printf("%s\n", "deleted");
 				continue;
 		}
 		int attribute = to_load.directory->meat[file_location + 11] & 0xFF;
 		//skip long names
 		if (attribute == 0x0F || attribute == 0x08){
-			printf("long name or system name\n");
 			continue;
 		}
 		memcpy(&to_load.file_names[(name_we_are_up_to) * NAME_SIZE], &to_load.directory->meat[file_location] , NAME_SIZE -1);
@@ -150,7 +141,6 @@ loaded_directory load_directory(int dir_start)
 void clean_name(char * name_to_clean)
 {
 	if(name_to_clean[0] == 0) return;
-	printf("about to clean:%s\n",name_to_clean);
 	char extention[5];
 	char final_name[NAME_SIZE]; 
 	for(int j =0; j < NAME_SIZE; j++) final_name[j] = 0;
@@ -168,11 +158,9 @@ void clean_name(char * name_to_clean)
 			break;
 		}
 	}
-	printf("i is %d", i);
 	strncpy(final_name, name_to_clean, i);
 	strcat(final_name, extention);
 	strcpy(name_to_clean, final_name);
-	printf("cleaned:%s\n",name_to_clean);
 }
 void ls(char * dir_to_list)
 {
@@ -219,20 +207,16 @@ int get_file_start(int dir_location, loaded_directory dir)
 	clus_start <<= 16;
 	//then read low
 	clus_start |= dir.directory->meat[dir_location + 26] & 0xFFFF;
-	printf("%s cluster number %x\n", &dir.file_names[dir_location/32* NAME_SIZE], clus_start);
 	return clus_start;
 }
 int get_file_from_name(char * dir_to_list)
 {
-	printf("file name is 0*%s*0\n", dir_to_list);
 
 	//remove starting space
 	while(dir_to_list[0] == ' '){
-		printf("--%c--\n", dir_to_list[0]);
 		dir_to_list = &dir_to_list[1];
 	}
 	dir_to_list[strlen(dir_to_list) - 1] = 0;
-	printf("file name is 0*%s*0\n", dir_to_list);
 	//create padded name to allow comparisons
 	//test if it's empty
 	if(dir_to_list[0] =='\0') return -2;
@@ -240,9 +224,7 @@ int get_file_from_name(char * dir_to_list)
 	for(int i = 0; i < NAME_SIZE; i++) dir_name[i] = '\0';
 	strcpy(dir_name, dir_to_list);
 	for(int i = 0; i < NAME_SIZE; i++) dir_name[i] = toupper(dir_name[i]);
-	printf("file name is 0*%s*0\n", dir_name);
 	for(int name_start = 0; curr_dir.file_names[name_start] != '\0'; name_start += NAME_SIZE){
-		printf("name:--%s-- compare --%s--\n", &curr_dir.file_names[name_start], dir_name);
 		if (strncmp(&curr_dir.file_names[name_start], dir_name, NAME_SIZE) == 0){
 			return curr_dir.file_offsets[name_start / NAME_SIZE];
 		}
@@ -253,20 +235,9 @@ int get_file_from_name(char * dir_to_list)
 int read_int(int num_bytes, int offset, char * source)
 {
 	int test = 0;
-	fprintf(stderr, "offset--0x%x--%d-- num_bytes--%d--\n", offset, offset, num_bytes);
 	memcpy(&test, &file_map[offset], num_bytes);
-	//fprintf(stdout, "%d\n", test);
 	return test;
 }
-// int read_int(int num_bytes, int offset, char * source)
-// {
-// 	//weird things are happening
-// 	int test[1];
-// 	memcpy(test, &file_map[offset], num_bytes);
-// 	fprintf(stdout, "%d\n", *test);
-// 	int ret_val = *test;
-// 	return ret_val;
-// }
 
 void print_info()
 {
@@ -277,20 +248,6 @@ void print_info()
 	fprintf(stdout, "BPB_FATSz32 is 0x%x, %d\n", info.BPB_FATSz32, info.BPB_FATSz32);
 
 }
-// void print_info()
-// {
-// 	int temp_var = read_int(2, 11, file_map);
-// 	fprintf(stdout, "BPB_BytesPerSec is 0x%x, %d\n", info.BPB_BytesPerSec, info.BPB_BytesPerSec);
-// 	temp_var = read_int(1, 13, file_map);
-// 	fprintf(stdout, "BPB_SecPerClus is 0x%x, %d\n", temp_var, temp_var);
-// 	temp_var = read_int(2, 14, file_map);
-// 	fprintf(stdout, "BPB_RsvdSecCnt is 0x%x, %d\n", temp_var, temp_var);
-// 	temp_var = read_int(1, 16, file_map);
-// 	fprintf(stdout, "BPB_NumFATS is 0x%x, %d\n", temp_var, temp_var);
-// 	temp_var = read_int(4, 36, file_map);
-// 	fprintf(stdout, "BPB_FATSz32 is 0x%x, %d\n", temp_var, temp_var);
-
-// }
 
 temp_file * get_file(char * source, int fat_start)
 {
@@ -303,13 +260,10 @@ temp_file * get_file(char * source, int fat_start)
 	//traverse the fat, getting data as we go
 	while(next_cluster && 2 <= next_cluster && next_cluster <= 0x0FFFFFEF ){
 		add_cluster(new_file, next_cluster);
-		printf("this is pointer %lu this is size %lu this is num_clusters %d\n", new_file->pointer, new_file->size, new_file->num_clusters);
 		//might be an off by one error
 		//maybe print whole table
 		next_cluster = (read_int(4, next_cluster * 4 + fat_beginning, source) & 0x0FFFFFFF);
-		printf("next_cluster is 0x%x--%d\n", next_cluster,next_cluster);
 	}
-	printf("read file\n");
 	if (next_cluster != 0 && next_cluster < 0x0FFFFFF8)
 	{
 		if (next_cluster == 0x0FFFFFF7)
@@ -337,13 +291,11 @@ temp_file * initilize_temp_file()
 void add_cluster(temp_file * file_so_far, int cluster_num)
 { 
 	//first cluster is called cluster 2
-	//printf("cluster read from 0x%x--%d--first cluster is 0x%x--\n", info.first_cluster + ((cluster_num - 2) * info.cluster_size), info.first_cluster + ((cluster_num - 2) * info.cluster_size), info.first_cluster);
 	memcpy(&file_so_far->meat[file_so_far->pointer], &file_map[info.first_cluster + ((cluster_num - 2) * info.cluster_size)], info.cluster_size);
 	//growing the arraylist
 	
 	file_so_far->pointer += info.cluster_size;
 	file_so_far->num_clusters++;
-	//printf("%s\n", &file_map[info.first_cluster + ((cluster_num - 2) * info.cluster_size)]);
 	if (file_so_far->pointer >= file_so_far->size)
 	{
 		file_so_far->size *= 2;
@@ -404,7 +356,6 @@ int main(int argc, char *argv[])
 	/* Parse boot sector and get information */
 
 	/* Get root directory address */
-	//printf("Root addr is 0x%x\n", root_addr);
 
 
 	/* Main loop.  You probably want to create a helper function
