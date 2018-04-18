@@ -504,14 +504,16 @@ int main(int argc, char *argv[])
 		else if(strncmp(cmd_line,"read",4)==0) {
 			int position;
 			int num_bytes;
-			char file_name[NAME_SIZE];
+			char file_name[NAME_SIZE + 1];
+			file_name[0] = ' ';
 			char dummy[4];
-			int test = sscanf(cmd_line, "%s %s %d %d", dummy, file_name, &position, &num_bytes);
+			int test = sscanf(cmd_line, "%s %s %d %d", dummy, &file_name[1], &position, &num_bytes);
 			if (test != 4)
 			{
 				fprintf(stderr, "%s\n", "Error: please enter correct parameters for read");
 				continue;
 			}
+
 			printf("%d\n", test);
 			read_file(file_name, position, num_bytes);
 		}
