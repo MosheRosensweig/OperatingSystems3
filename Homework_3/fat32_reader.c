@@ -74,6 +74,8 @@ loaded_directory load_directory(int dir_start);
 int read_int(int num_bytes, int offset, char * source);
 int get_file_start(int dir_location, loaded_directory dir);
 void clean_name(char * name_to_clean);
+int get_file_size(int file_cur_dir_offset);
+char * delete_leading_spaces(char * item);
 void initilize(char * file_path)
 {
 	int fd;
@@ -97,6 +99,28 @@ void initilize(char * file_path)
 	info.first_cluster = info.BPB_BytesPerSec * (info.BPB_RsvdSecCnt + info.BPB_NumFATS * info.BPB_FATSz32) + 0;
 	//reading the first cluster of root directory and loading as current directory
 	curr_dir = load_directory(read_int(4, 44, file_map));  
+}
+void changeDirectory(char * new_dir_name)
+{
+	int dir_to_cd;
+	dir_to_cd = get_file_from_name(new_dir_name);
+	if(dir_to_cd == -1)
+	{
+		fprintf(stderr,"Error: No Directory with that name\n");
+		return;
+	}
+	else if (strchr(new_dir_name, '.') !=0 && strchr(new_dir_name, '.') != new_dir_name){
+		printf("Error: That is a file not a directory\n");
+		return;
+	}
+	int begin_cluster = get_file_start(dir_to_cd, curr_dir);
+	free_loaded(curr_dir);
+	//it thinks the root cluster starts at zero, correct it to true start of root cluster
+	if (begin_cluster == 0)
+	{
+		begin_cluster = read_int(4, 44, file_map);  
+	}
+	curr_dir = load_directory(begin_cluster);
 }
 //loads current directory into curr_dir
 loaded_directory load_directory(int dir_start)
@@ -182,9 +206,8 @@ void ls(char * dir_to_list)
 		int begin_cluster = get_file_start(dir_to_ls, curr_dir);
 		dir = load_directory(begin_cluster);
 	}
-	char buff[NAME_SIZE];
 	for(int name_start = 0; dir.file_names[name_start] != '\0'; name_start += NAME_SIZE){
-		printf("%s\t",&dir.file_names[name_start]);
+		printf("%s \t",&dir.file_names[name_start]);
 	}
 	printf("\n");
 	if(dir_to_ls != -2) free_loaded(dir);
@@ -213,10 +236,11 @@ int get_file_from_name(char * dir_to_list)
 {
 
 	//remove starting space
-	while(dir_to_list[0] == ' '){
-		dir_to_list = &dir_to_list[1];
+	dir_to_list = delete_leading_spaces(dir_to_list);
+	if (dir_to_list[strlen(dir_to_list) - 1] == '\n')
+	{
+		dir_to_list[strlen(dir_to_list) - 1] = 0;
 	}
-	dir_to_list[strlen(dir_to_list) - 1] = 0;
 	//create padded name to allow comparisons
 	//test if it's empty
 	if(dir_to_list[0] =='\0') return -2;
@@ -288,6 +312,20 @@ temp_file * initilize_temp_file()
 
 	return temp;
 }
+int check_and_get_file_size(char * file_name, int file_cur_dir_offset)
+{
+	// int file_cur_dir_offset = get_file_from_name(file_name);
+	if(file_cur_dir_offset < 0)
+	{
+		printf("Error: No File with that name\n");
+		return -1;
+	}
+	else if (strchr(file_name, '.') ==0 || strchr(file_name, '.') == file_name){
+		printf("Error: That is a directory not a file\n");
+		return -1;
+	}
+	return get_file_size(file_cur_dir_offset);
+}
 void add_cluster(temp_file * file_so_far, int cluster_num)
 { 
 	//first cluster is called cluster 2
@@ -303,6 +341,75 @@ void add_cluster(temp_file * file_so_far, int cluster_num)
 		memset(file_so_far->meat + file_so_far->pointer, 0, (file_so_far->size - file_so_far->pointer));
 	}
 }
+void read_file(char * file_name, int start, int num_bytes)
+{
+
+	// char file_name_to_read[NAME_SIZE];
+	// for(int i = 0; i < NAME_SIZE; i++) file_name_to_read[i] = '\0';
+	// // file_name = delete_leading_spaces(file_name);
+	// printf("--%s-- --%s-- --%d--\n", file_name_to_read, file_name, (int) (strchr(file_name, ' ') - file_name));
+	// strncpy(file_name_to_read, file_name, (int) (strchr(file_name, ' ') - file_name));
+	// printf("--%s-- --%s-- --%d--\n", file_name_to_read, file_name, (int) (strchr(file_name, ' ') - file_name));
+	int file_cur_dir_offset = get_file_from_name(file_name);
+	// printf("file_name:%s: file_offset:%x:\n",file_name,file_cur_dir_offset );
+	// if(file_cur_dir_offset < 0)
+	// {
+	// 	printf("Error: No File with that name\n");
+	// 	return;
+	// }
+	// else if (strchr(file_name, '.') ==0 || strchr(file_name, '.') == file_name){
+	// 	printf("Error: That is a directory not a file\n");
+	// 	return;
+	// }
+	// int file_size = get_file_size(file_cur_dir_offset);
+	// printf("%d\n", file_size);
+	int file_size = check_and_get_file_size(file_name, file_cur_dir_offset);
+	if (file_size == -1)
+	{
+		return;
+	}
+	if (file_size < start + num_bytes)
+	{
+		printf("Error: attempt to read beyond end of file\n");
+		return;
+	}
+	temp_file * file_to_read = get_file(file_map, get_file_start(file_cur_dir_offset, curr_dir));
+	file_to_read->meat[start + num_bytes] = 0;
+	printf("%s\n", &file_to_read->meat[start]);
+	//file_to_read->meat[start + num_bytes] = 8;
+	free(file_to_read->meat);
+	free(file_to_read);
+}
+int get_file_size(int file_cur_dir_offset)
+{
+	int * file_size = (int*)&curr_dir.directory->meat[file_cur_dir_offset + 28];
+	return *file_size;
+}
+/*
+	Description: Prints the volume name of the file system image. 
+	If there is a volume name it will be found in the root directory. 
+	If there is no volume name, print “Error: volume name not found.”
+*/
+void volume()
+{
+	//According to the specs, at offset 71 or 0x47, is the volLab (I assume means volume lable) - it's 11 bytes
+	char volLab[12];
+	volLab[11] = '\0';
+	strncpy(volLab, file_map+71, 11);
+	if (strcmp(volLab, "NO NAME    ") == 0)
+	{
+		fprintf(stderr, "Error: volume name not found\n");
+	}
+	printf("Volume label is: %s\n", volLab);
+
+}
+char * delete_leading_spaces(char * item)
+{
+	while(item[0] == ' '){
+		item = &item[1];
+	}
+	return item;
+}
 void print_stat(char * dir_name)
 {
 	int dir_to_stat;
@@ -312,10 +419,10 @@ void print_stat(char * dir_name)
 		printf("Error: file/directory does not exist\n");
 		return;
 	}
-	int * size = (int*)&curr_dir.directory->meat[dir_to_stat + 28];
+	int size = get_file_size(dir_to_stat);
 	int next_clus_num = get_file_start(dir_to_stat, curr_dir);
 	int attr = curr_dir.directory->meat[dir_to_stat + 11] & 0xFF;
-	printf("Size is %d\n", *size);
+	printf("Size is %d\n", size);
 	printf("Attributes");
 	if(attr & 0x01){
 		printf(" ATTR_READ_ONLY");
@@ -370,35 +477,43 @@ int main(int argc, char *argv[])
 		if(strncmp(cmd_line,"info",4)==0) {
 			print_info();
 		}
-
-		else if(strncmp(cmd_line,"open",4)==0) {
-			int temp_int;
-			scanf("%x", &temp_int);
-			temp_file * temp = get_file(file_map , temp_int);	
-			printf("%s 0x%x %d\n", temp->meat, read_int(4, 0, temp->meat), read_int(4, 0, temp->meat));
-		}
-
-		else if(strncmp(cmd_line,"close",5)==0) {
-			printf("Going to close!\n");
-		}
-		
 		else if(strncmp(cmd_line,"size",4)==0) {
-			printf("Going to size!\n");
+			int size = check_and_get_file_size(&cmd_line[5], get_file_from_name(&cmd_line[5]));
+			printf("Size is %d\n", size);
 		}
+		else if(strncmp(cmd_line,"volume",6)==0) {
+			volume();
+		}
+		// else if(strncmp(cmd_line,"open",4)==0) {
+		// 	int temp_int;
+		// 	scanf("%x", &temp_int);
+		// 	temp_file * temp = get_file(file_map , temp_int);	
+		// 	printf("%s 0x%x %d\n", temp->meat, read_int(4, 0, temp->meat), read_int(4, 0, temp->meat));
+		// }
 
 		else if(strncmp(cmd_line,"cd",2)==0) {
-			printf("Going to cd!\n");
+			changeDirectory(&cmd_line[3]);
 		}
 
 		else if(strncmp(cmd_line,"ls",2)==0) {
-			//printf("file offset is :%d", get_file_from_name(&cmd_line[2]));
 			ls(&cmd_line[2]);
 		}
 		else if(strncmp(cmd_line,"stat",4)==0) {
 			print_stat(&cmd_line[4]);
 		}
 		else if(strncmp(cmd_line,"read",4)==0) {
-			printf("Going to read!\n");
+			int position;
+			int num_bytes;
+			char file_name[NAME_SIZE];
+			char dummy[4];
+			int test = sscanf(cmd_line, "%s %s %d %d", dummy, file_name, &position, &num_bytes);
+			if (test != 4)
+			{
+				fprintf(stderr, "%s\n", "Error: please enter correct parameters for read");
+				continue;
+			}
+			printf("%d\n", test);
+			read_file(file_name, position, num_bytes);
 		}
 		
 		else if(strncmp(cmd_line,"quit",4)==0) {
@@ -417,8 +532,8 @@ int main(int argc, char *argv[])
 }
 void insertion_sort(loaded_directory dir)
 {
-	int index_of_next_spot = 0;
-	int index_of_min_value = index_of_next_spot;
+	// int index_of_next_spot = 0;
+	// int index_of_min_value = index_of_next_spot;
 	for(int outer = 0; dir.file_names[outer*NAME_SIZE] != '\0'; outer += 1){
 		for(int inner = outer; dir.file_names[inner*NAME_SIZE] != '\0'; inner += 1){
 			if(strncmp(&dir.file_names[inner*NAME_SIZE], &dir.file_names[outer*NAME_SIZE], NAME_SIZE) < 0){
