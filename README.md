@@ -27,6 +27,8 @@ ex: ./fat32_reader ./fat32.img
 
 - Sometimes we needed forgot to zero out / properly initialize variables.
 - Sometimes we needed to mask off extra bits that weren't "clean"
+- When we did "cd .." to go back to the root, it didn't work so we had to special cas that
+
 
 6] Any sources you used to help you write your programs/scripts
 
