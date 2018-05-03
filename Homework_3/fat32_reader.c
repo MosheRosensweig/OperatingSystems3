@@ -53,7 +53,18 @@ typedef struct loaded_directory{
 	//if I look at file_offsets[x] it will tell me where the file named file_names[x] starts in the directory above
 	int * file_offsets;//cluster number of the start of the file names in the corrisponding spot in the next array 
 	char * file_names;
+	int fmap_start;
+	int fat_start;
+
 }loaded_directory;
+typedef struct free_list{
+	int head;
+	int foot;
+	int total_size;
+	int current_size;
+	int * list;
+}free_list;
+free_list * free_clusters;
 static loaded_directory curr_dir;
 void insertion_sort(loaded_directory dir);
 void swap(loaded_directory dir, int i, int j);
@@ -62,25 +73,36 @@ static temp_file * initilize_temp_file();
 //11 charecters, one null terminator and one .
 static int NAME_SIZE = 13; 
 void initilize(char * file_path);
+void print_freelist_info();
 int read_int(int num_bytes, int offset, char * source);
 void print_info();
+void make_file(char * file_name, int num_bytes);
+int * peek_free_list(int num_to_peek);
 void free_loaded(loaded_directory to_free);
-void add_cluster(temp_file * file_so_far, int cluster_num);
+int add_cluster(temp_file * file_so_far, int cluster_num, int dummy_var);
 void load_curr_directory(int dir_start, int first, int size);
 void get_current_dir_list(char * directory);
 int get_file_from_name(char * dir_to_list);
 temp_file * get_file(char * source, int fat_start);
+int find_byte(temp_file * dummy_file, int cluster_num, int offset_left);
+// temp_file * traverse_fat(char * source, int fat_start, temp_file (*start_function)(void), void (*step_function)(temp_file *, int));
 loaded_directory load_directory(int dir_start);
 int read_int(int num_bytes, int offset, char * source);
 int get_file_start(int dir_location, loaded_directory dir);
 void clean_name(char * name_to_clean);
 int get_file_size(int file_cur_dir_offset);
 char * delete_leading_spaces(char * item);
+void push_free_list(int to_push, free_list * push_list);
+free_list * init_free_list(char * source, int fat_start, int fat_size);
+temp_file * dummy_func();
+temp_file * traverse_fat(char * source, int fat_start, temp_file *(*start_function)(), int (*step_function)(temp_file *, int, int), int goal_offset);
+int zero_out_cluster_and_add_to_free(temp_file * dummy, int cluster_location, int dummy_var);
 void initilize(char * file_path)
 {
 	int fd;
 	//used https://www.linuxquestions.org/questions/programming-9/mmap-tutorial-c-c-511265/
-	fd = open(file_path, O_RDONLY);
+	//and https://jameshfisher.com/2017/01/28/mmap-file-write.html
+	fd = open(file_path,  O_RDWR | O_CREAT, (mode_t)0600);
 	FILE * fp = fdopen(fd, "r");
 	if (fd == -1) {
 		perror("Error opening file for reading");
@@ -89,7 +111,7 @@ void initilize(char * file_path)
 	//used https://stackoverflow.com/questions/238603/how-can-i-get-a-files-size-in-c
 	fseek(fp, 0, SEEK_END);
 	int sz = ftell(fp);
-	file_map = mmap(0, sz, PROT_READ, MAP_SHARED, fd, 0);
+	file_map = mmap(0, sz, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 	info.BPB_BytesPerSec = read_int(2, 11, file_map);
 	info.BPB_SecPerClus = read_int(1, 13, file_map);
 	info.BPB_RsvdSecCnt = read_int(2, 14, file_map);
@@ -98,7 +120,72 @@ void initilize(char * file_path)
 	info.cluster_size = info.BPB_SecPerClus * info.BPB_BytesPerSec;
 	info.first_cluster = info.BPB_BytesPerSec * (info.BPB_RsvdSecCnt + info.BPB_NumFATS * info.BPB_FATSz32) + 0;
 	//reading the first cluster of root directory and loading as current directory
-	curr_dir = load_directory(read_int(4, 44, file_map));  
+	curr_dir = load_directory(read_int(4, 44, file_map));
+	free_clusters = init_free_list(file_map, info.BPB_RsvdSecCnt * info.BPB_BytesPerSec, info.BPB_FATSz32 * info.BPB_BytesPerSec / 4);
+}
+free_list * init_free_list(char * source, int fat_start, int fat_size)
+{
+	free_list * new_list = calloc(1, sizeof(free_list));
+	new_list->list = calloc(fat_size, sizeof(int));
+	new_list->total_size = fat_size;
+	new_list->current_size = 0;
+	new_list->head = 0;
+	new_list->foot = 0;
+	for (int i = 2; i < fat_size * 4; i += 4)
+	{
+		// printf("i is %d item at i is %d offset is %x\n",i, read_int(4, fat_start + i, file_map), fat_start + i);
+		if (read_int(4, fat_start + i, file_map) == 0)
+		{
+			push_free_list(i, new_list);
+		}
+	}
+	return new_list;
+}
+void print_freelist_info()
+{
+	int * first_3 = peek_free_list(3);
+	printf("There are %d clusters free\n", free_clusters->current_size);
+	printf("the first 3 are [%x, %x, %x]\n", first_3[0], first_3[1], first_3[2]);
+	free(first_3);
+}
+int pop_free_list(free_list * pop_list)
+{
+/*
+int head;
+	int foot;
+	int size;
+	int clusters_left;
+	int * list;
+*/	if(pop_list->current_size <= 0)
+	{
+		fprintf(stderr, "Error: free_list is empty\n");
+		return 0;
+	}
+	int return_clus = pop_list->list[pop_list->head];
+	pop_list->head = (pop_list->head+1)%pop_list->total_size;
+	pop_list->current_size--;
+	return return_clus;
+
+}
+void push_free_list(int to_push, free_list * push_list)
+{
+	if (push_list->current_size >= push_list->total_size)
+	{
+		fprintf(stderr, "Error: free_list is full\n");
+		return;
+	}
+	push_list->list[push_list->foot] = to_push;
+	push_list->foot = (push_list->foot+1)%push_list->total_size;
+	push_list->current_size++;
+}
+int * peek_free_list(int num_to_peek)
+{
+	int * first_3 = calloc(num_to_peek, sizeof(int));
+	for (int i = 0; i < num_to_peek; i++)
+	{
+		first_3[i] = free_clusters->list[(free_clusters->head + i) % free_clusters->total_size];
+	}
+	return first_3;
 }
 void changeDirectory(char * new_dir_name)
 {
@@ -160,6 +247,7 @@ loaded_directory load_directory(int dir_start)
 		name_we_are_up_to++;
 	}
 	insertion_sort(to_load);
+	to_load.fat_start = dir_start;
 	return to_load;
 }
 void clean_name(char * name_to_clean)
@@ -220,6 +308,40 @@ void free_loaded(loaded_directory to_free)
 	free(to_free.directory->meat);
 	free(to_free.directory);
 }
+/*
+	Description: mark the designated file as deleted in the current directory and all its contents as free in the FAT. 
+	ls should no longer list the file, though its directory entry should still be visible in hexedit, marked as deleted.
+*/
+void delete_file(char * file_name)
+{
+	/*
+		1] Find the file in curr_dir
+		2] add that file's cluster to freelist
+		3] Remove that file from curr_dir and make sure to clean up curr_dir
+
+
+	*/
+	if (strchr(file_name, '.') ==0 || strchr(file_name, '.') == file_name){
+		printf("Error: That is a directory not a file\n");
+		return;
+	}
+	int file_index_in_curr_dir = get_file_from_name(file_name);
+	if(file_index_in_curr_dir < 0)
+	{
+		printf("Error: No File with that name\n");
+		return;
+	}
+	//this is the start of the file in the FAT
+	int file_start = get_file_start(file_index_in_curr_dir, curr_dir);
+	//this removes the file from the fat and adds each cluster to the free list
+	traverse_fat(file_map, file_start, dummy_func, zero_out_cluster_and_add_to_free, 0);
+	printf("\tPARAM %d %d\n",curr_dir.fat_start, file_index_in_curr_dir);
+	//this looks through the directory called curr_dir and overwrites the name to start with 0xE5
+	traverse_fat(file_map, curr_dir.fat_start, dummy_func, find_byte, file_index_in_curr_dir);
+	curr_dir = load_directory(curr_dir.fat_start);
+	// printf("%s\n", &file_to_read->meat[start]);
+	//file_to_read->meat[start + num_bytes] = 8;
+} 
 //dir_location 	= byte offset where the record is stored
 //dir 			= directory it is stored in
 int get_file_start(int dir_location, loaded_directory dir)
@@ -272,8 +394,63 @@ void print_info()
 	fprintf(stdout, "BPB_FATSz32 is 0x%x, %d\n", info.BPB_FATSz32, info.BPB_FATSz32);
 
 }
-
+int zero_out_cluster_and_add_to_free(temp_file * dummy, int cluster_location, int dummy_var)
+{
+	int fat_beginning = info.BPB_RsvdSecCnt * info.BPB_BytesPerSec;
+	int fat_beginning2 = fat_beginning + info.BPB_FATSz32 * 4;
+	push_free_list(cluster_location, free_clusters);
+	printf("overwriteing: Ox%x and : 0x%x\n",fat_beginning + cluster_location * 4,  fat_beginning2 + cluster_location * 4);
+	memset(&file_map[fat_beginning + cluster_location * 4], 0, 4);
+	if (info.BPB_NumFATS >= 2) memset(&file_map[fat_beginning2 + cluster_location * 4], 0, 4);
+	return 0;
+}
+temp_file * dummy_func(){
+	return (temp_file*) NULL;
+}
+temp_file * traverse_fat(char * source, int fat_start, temp_file *(*start_function)(), int (*step_function)(temp_file *, int, int), int goal_offset)
+{
+	printf("this is the start %d\n", fat_start);
+	temp_file * new_file = start_function();
+	//finds first fat entry byte number (4 bytes per entry) i.e the begging of the FAT linked list 
+	// long int start_entry = info.BPB_RsvdSecCnt * info.BPB_BytesPerSec + fat_start * 4;
+	int next_cluster = fat_start;
+	int fat_beginning = info.BPB_RsvdSecCnt * info.BPB_BytesPerSec;
+	int tmp_cluster;
+	//while we have a valid next cluster
+	//traverse the fat, getting data as we go
+	while(next_cluster && 2 <= next_cluster && next_cluster <= 0x0FFFFFEF ){
+		tmp_cluster = next_cluster;
+		next_cluster = (read_int(4, tmp_cluster * 4 + fat_beginning, source) & 0x0FFFFFFF);
+		printf("\nthis is the step input: tmp_cluster: %d goal_offset: %d\n",tmp_cluster, goal_offset);
+		goal_offset = step_function(new_file, tmp_cluster, goal_offset);
+		if (goal_offset == -1)
+		{
+			return new_file;
+		}
+		//might be an off by one error
+		//maybe print whole table
+		printf("next_cluster is %d, tmp_cluster is %d\n", next_cluster, tmp_cluster);
+	}
+	if (next_cluster != 0 && next_cluster < 0x0FFFFFF8)
+	{
+		if (next_cluster == 0x0FFFFFF7)
+		{
+			fprintf(stderr, "ERROR: bad cluster reading file starting at %d exiting program\n", fat_start);
+		}
+		else{
+			fprintf(stderr, "ERROR: reading file starting at %d exiting program\n", fat_start);
+		}
+		//put cleaner exit when done
+		exit(1);
+	}
+	return new_file;
+}
 temp_file * get_file(char * source, int fat_start)
+{
+	return traverse_fat(source, fat_start, initilize_temp_file, add_cluster, 0);
+}
+/*
+temp_file * get_file(char * source, int fat_start, (temp_file *) start_function(void), void *step_function(temp_file *, int))
 {
 	temp_file * new_file = initilize_temp_file();
 	//finds first fat entry byte number (4 bytes per entry) i.e the begging of the FAT linked list 
@@ -302,6 +479,7 @@ temp_file * get_file(char * source, int fat_start)
 	}
 	return new_file;
 }
+*/
 temp_file * initilize_temp_file()
 {
 	temp_file * temp = calloc(1, sizeof(temp_file));
@@ -326,7 +504,20 @@ int check_and_get_file_size(char * file_name, int file_cur_dir_offset)
 	}
 	return get_file_size(file_cur_dir_offset);
 }
-void add_cluster(temp_file * file_so_far, int cluster_num)
+int find_byte(temp_file * dummy_file, int cluster_num, int offset_left)
+{
+	printf("offset_left %x cluster_num %d\n",offset_left, cluster_num );
+	if (offset_left > (info.cluster_size))
+	{
+		return offset_left - (info.cluster_size);
+	}
+	else{
+		printf("yay\n");
+		file_map[info.first_cluster + ((cluster_num - 2) * info.cluster_size) + offset_left] = 0xE5;
+		return -1;
+	}
+}
+int add_cluster(temp_file * file_so_far, int cluster_num, int dummy_var)
 { 
 	//first cluster is called cluster 2
 	memcpy(&file_so_far->meat[file_so_far->pointer], &file_map[info.first_cluster + ((cluster_num - 2) * info.cluster_size)], info.cluster_size);
@@ -340,6 +531,7 @@ void add_cluster(temp_file * file_so_far, int cluster_num)
 		file_so_far->meat = realloc(file_so_far->meat, file_so_far->size);
 		memset(file_so_far->meat + file_so_far->pointer, 0, (file_so_far->size - file_so_far->pointer));
 	}
+	return 0;
 }
 void read_file(char * file_name, int start, int num_bytes)
 {
@@ -409,6 +601,49 @@ char * delete_leading_spaces(char * item)
 		item = &item[1];
 	}
 	return item;
+}
+temp_file * hack_temp_file_to_store_results()
+{
+	temp_file * hacked_file = calloc(1, sizeof(temp_file));
+	//this tells us if we found a free space or not
+	hacked_file->num_clusters = -1;
+	//this tells us where the space is
+	hacked_file->pointer = -1;
+	//this tells us the last cluster number we only care about this if we fail
+	hacked_file->size = -1;
+	return hacked_file;
+}
+/*
+  Description: In the current directory, create a new file with the given name (8+3 name will be specified. 
+  Also initialize it to the given size by assigning it clusters that are currently free on the FAT.
+  Make sure the directory entry reflects the assigned size. 
+  The contents of your newly created file should be the string “New File.\r\n” repeated over and over.
+  (\r\n stands for the Microsoft newline character sequence).
+*/
+void make_file(char * file_name, int num_bytes)
+{
+	/**
+	  1] Find the end of the current direcotry
+	  2] Check if there is enough space in this cluster to hold another 32 bits (i.e. the size of a dir_struct)
+	  3] If no, get pop the freelist and add that to curr_dur's list --> make sure to update the actual img as well
+	  4] Make a new dir_stuct. Zero out the location in memory, and then "or" this to that location. (i.e. copy it over)
+	  	[a] set the name
+	  	[b] set the attr
+	  	[c] set the date
+	  	[d] etc... see page 23
+
+	  	[now actually make the file]
+	  1] We neet to make a file struct (?) Can we just reuse the "loaded_dir" struct we already have? Should we?
+	  2] Figure out how many clusters we will need to store the file 
+	  3] Pop the free list that many times and add them to the file's list of clustors, after the last one, put an end of file
+	  	 i.e. take number_of_clusters+1, the exta one is needed to hold the tail --> make sure to update the actual img as well
+		 --> Make sure to split the first cluster number into high bits and low bits and store it in the file
+	  4] Iterate throught the list of clusters and write “New File.\r\n” as many times as needed
+	  5] Done
+	*/
+	//traverse_fat(file_map, )
+
+
 }
 void print_stat(char * dir_name)
 {
@@ -494,12 +729,30 @@ int main(int argc, char *argv[])
 		else if(strncmp(cmd_line,"cd",2)==0) {
 			changeDirectory(&cmd_line[3]);
 		}
-
+		else if(strncmp(cmd_line, "freelist", 8) == 0) {
+			print_freelist_info();
+		}
+		else if(strncmp(cmd_line, "delete", 6) == 0) {
+			delete_file(&cmd_line[6]);
+		}
 		else if(strncmp(cmd_line,"ls",2)==0) {
 			ls(&cmd_line[2]);
 		}
 		else if(strncmp(cmd_line,"stat",4)==0) {
 			print_stat(&cmd_line[4]);
+		}
+		else if(strncmp(cmd_line,"newfile",7)==0) {
+			char file_name[NAME_SIZE];
+			char dummy[7];
+			int num_bytes; //I'm assuimg "size" is in bytes
+			int test = sscanf(cmd_line, "%s %s %d", dummy, file_name, &num_bytes);
+			if (test != 3)
+			{
+				fprintf(stderr, "%s\n", "Error: please enter correct parameters for newfile");
+				continue;
+			}
+			printf("%d\n", test);
+			make_file(file_name, num_bytes);
 		}
 		else if(strncmp(cmd_line,"read",4)==0) {
 			int position;
