@@ -703,6 +703,11 @@ void make_file(char * file_name, int num_bytes)
 	  4] Iterate throught the list of clusters and write “New File.\r\n” as many times as needed
 	  5] Done
 	*/
+	// int endOfFileName = strlen(file_name);
+	// if (file_name[endOfFileName - 4] != '.')
+	// {
+	// 	fprintf(stderr, "%s\n", );
+	// }
 	temp_file * space = traverse_fat(file_map, curr_dir.fat_start, hack_temp_file_to_store_results,find_space_in_directory , 0);
 	//this tells us if we never found a free space
 	
@@ -771,6 +776,11 @@ void make_file(char * file_name, int num_bytes)
 	// memcpy(&file_map[26], &fileFatStartLo, 2);
 	// memcpy(&file_map[28], &num_bytes, 4);
 	int fat_start = write_dir_entry(file_name, num_bytes, space->pointer);
+	if (fat_start == -1)
+	{
+		printf("Error please enter valid file name\n");
+		return;
+	}
 	curr_dir = load_directory(curr_dir.fat_start);
 	traverse_fat(file_map, fat_start ,store_offset, fill_file, num_bytes);
 }
@@ -793,15 +803,50 @@ int write_dir_entry(char * file_name, int num_bytes, long int pointer)
 		}
 	}
 	//write extention
+	// int end = strlen(file_name);
+	// char * lastDot = strrchr(file_name, '.');
+	// lastDot++;
+	// int counter = 0;
+	// found = 0;
+	// for (char * i = lastDot; i < file_name + end; i++)
+	// {
+	// 	file_map[pointer + 8 + counter] = toupper(*i);
+	// 	counter++;
+	// 	if (counter >= 3)
+	// 	{
+	// 		return -1;
+	// 	}
+	// }
+
+	//write extention
+	found = 0;
 	int end = strlen(file_name);
+	int j = 0; //find the index of the dot
+	for(j = end-1; file_name[j] != '.' && j > 0; j--);
+	printf("j is%d end is%d\n",j, end );
+	if(j < 0 || j <= end-5) return -1; //make sure the input is correct otherwise fail
+	printf("j is%d end is%d\n",j, end );
 	for (int i = 0; i < 3; i++)
 	{
-		file_map[pointer + 8 + i] = toupper(file_name[end - 3 + i]);
+		// printf("--%c--\n", );
+		if (i == (end -1 - j))
+		{
+			found = 1;
+		}
+		if (found)
+		{
+			file_map[pointer + i + 8] = ' ';	
+		}
+		else{
+			file_map[pointer + i + 8] = toupper(file_name[i + j + 1]);	
+		}
 	}
-	for (int i = 0; i < 11; ++i)
-	{
-		fprintf(stderr, "--%c--\n", file_map[pointer + i]);
-	}
+
+
+	// for (int i = 0; i < 11; ++i)
+	// {
+	// 	fprintf(stderr, "--%c--\n", file_map[pointer + i]);
+	// }
 
 	file_map[pointer + 11] = 0x20;
 	file_map[pointer + 12] = 0x00;
