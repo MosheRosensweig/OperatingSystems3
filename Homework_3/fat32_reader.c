@@ -219,7 +219,6 @@ loaded_directory load_directory(int dir_start)
 	
 	//extra one for null terminator
 	to_load.directory = get_file(file_map, dir_start);
-	printf("offset after loading %x\n",to_load.directory->meat[251] );
 	// this is how many files can fit in the number of clusters we have
 	//leave one extra space for null termination
 	int number_of_files = (info.cluster_size/32) * to_load.directory->num_clusters + 1;
@@ -339,7 +338,7 @@ void delete_file(char * file_name)
 	int file_start = get_file_start(file_index_in_curr_dir, curr_dir);
 	//this removes the file from the fat and adds each cluster to the free list
 	traverse_fat(file_map, file_start, dummy_func, zero_out_cluster_and_add_to_free, 0);
-	printf("\tPARAM %d %d\n",curr_dir.fat_start, file_index_in_curr_dir);
+	// printf("\tPARAM %d %d\n",curr_dir.fat_start, file_index_in_curr_dir);
 	//this looks through the directory called curr_dir and overwrites the name to start with 0xE5
 	traverse_fat(file_map, curr_dir.fat_start, dummy_func, find_byte, file_index_in_curr_dir);
 	curr_dir = load_directory(curr_dir.fat_start);
@@ -350,11 +349,6 @@ void delete_file(char * file_name)
 //dir 			= directory it is stored in
 int get_file_start(int dir_location, loaded_directory dir)
 {
-	printf("stat after getting start %x\n",curr_dir.directory->meat[251] );
-	printf("stat after getting start %x\n",dir.directory->meat[251] );
-	printf("dir_location %d\n", dir_location);
-	printf("gfs later mapped 0x%x\n", file_map[1049851]);
-	printf("dir_location + 20 is: %d\n", dir_location + 20);
 	int clus_start = 0;
 	//first read high and mask off first 2 bytes because the addresses are only 28 bit
 	clus_start = dir.directory->meat[dir_location + 20] & 0xFF;
@@ -828,7 +822,6 @@ int write_dir_entry(char * file_name, int num_bytes, long int pointer)
 	printf("j is%d end is%d\n",j, end );
 	for (int i = 0; i < 3; i++)
 	{
-		// printf("--%c--\n", );
 		if (i == (end -1 - j))
 		{
 			found = 1;
@@ -843,10 +836,6 @@ int write_dir_entry(char * file_name, int num_bytes, long int pointer)
 	}
 
 
-	// for (int i = 0; i < 11; ++i)
-	// {
-	// 	fprintf(stderr, "--%c--\n", file_map[pointer + i]);
-	// }
 
 	file_map[pointer + 11] = 0x20;
 	file_map[pointer + 12] = 0x00;
@@ -854,7 +843,7 @@ int write_dir_entry(char * file_name, int num_bytes, long int pointer)
 	//used https://stackoverflow.com/questions/1442116/how-to-get-the-date-and-time-values-in-a-c-program
 	time_t tim = time(NULL);
 	struct tm tm = *localtime(&tim);
-	printf("%d/%d/%d %d:%d:%d\n",(tm.tm_mon + 1),tm.tm_mday, (tm.tm_year - 80), tm.tm_hour,tm.tm_min, tm.tm_sec );
+	// printf("%d/%d/%d %d:%d:%d\n",(tm.tm_mon + 1),tm.tm_mday, (tm.tm_year - 80), tm.tm_hour,tm.tm_min, tm.tm_sec );
 	int create_time = (tm.tm_sec >> 1) + (tm.tm_min << 5) + (tm.tm_hour << 11);
 	int create_date = tm.tm_mday + ((tm.tm_mon + 1) << 5) + ((tm.tm_year - 80) << 9);
 	memcpy(&file_map[pointer + 14], &create_time, 2);
@@ -879,30 +868,19 @@ int write_dir_entry(char * file_name, int num_bytes, long int pointer)
 	copyTwo(pointer + 26, fileFatStartLo);
 	// memcpy(&file_map[pointer + 20], &fileFatStartHi, 2);
 	// memcpy(&file_map[pointer + 26], &fileFatStartLo, 2);
-	printf("data on drive 3 %x\n", file_map[pointer + 21]);
 	memcpy(&file_map[pointer + 28], &num_bytes, 4);
-	printf("hi:%x lo:%x\n",fileFatStartHi, fileFatStartLo);
-	printf("%x\n", fileFatStart);
-	printf("later mapped 0x%x\n", file_map[1049851]);
 	return fileFatStart;
 }
 void copyTwo(int start_address, unsigned int data)
 {
 	// unsigned int * tempMap = (unsigned int *) file_map;
 	// file_map[]
-	printf("%x\n", data);
 	file_map[start_address] = 0;
 	file_map[start_address + 1] = 0;
-	printf("here is data %x here is address\n",  (unsigned char) (data & 0xff));
-	printf("start_address %x\n", start_address + 1);
 	file_map[start_address] = (unsigned char) (data & 0xff);
-	printf("here is data on drive%x\n",(unsigned char) file_map[start_address]);
 	data = data >> 8;
 
 	file_map[start_address + 1] = (unsigned char) (data & 0xff);
-	printf("here is data 2 0x%x\n",(unsigned char) (data & 0xff));
-	printf("here is data on drive2 0x%x\n",file_map[start_address + 1]);
-	printf("start address is: %d\n", start_address);
 }
 int allocate_space(int numOfClusters)
 {
@@ -934,11 +912,8 @@ int allocate_space(int numOfClusters)
 }
 void print_stat(char * dir_name)
 {
-	printf("stat later mapped 0x%x\n", file_map[1049851]);
-	printf("stat after loading %x\n",curr_dir.directory->meat[251] );
 	int dir_to_stat;
 	dir_to_stat = get_file_from_name(dir_name);
-	printf("dir offset %x", dir_to_stat);
 	if(dir_to_stat < 0)
 	{
 		printf("Error: file/directory does not exist\n");
