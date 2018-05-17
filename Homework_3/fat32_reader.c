@@ -243,7 +243,23 @@ loaded_directory load_directory(int dir_start)
 		if (attribute == 0x0F || attribute == 0x08){
 			continue;
 		}
+
+		//This was an attempt
+		// char * the_file = (char *) &to_load.directory->meat[file_location];
+		// //If it's a short file, remove the padding
+		// int back_offset = -1; 
+		// int end = strlen(the_file);
+		// int j = 0; //find the index of the dot
+		// for(j = end-1; the_file[j] != '.' && j > 0; j--);
+		// if(end - j < 4) back_offset = end - j;
+		// // printf("1] The file name is %s--\n",&to_load.directory->meat[file_location] );
+		// printf("end = %d, j = %d\n",end, j );
+		// printf("2] The file name is %s--\t", the_file);
+		// printf("back_offset = %d\n\n", back_offset);
+		// memcpy(&to_load.file_names[(name_we_are_up_to) * NAME_SIZE], &to_load.directory->meat[file_location] , NAME_SIZE + back_offset);
+
 		memcpy(&to_load.file_names[(name_we_are_up_to) * NAME_SIZE], &to_load.directory->meat[file_location] , NAME_SIZE -1);
+		to_load.file_names[name_we_are_up_to* NAME_SIZE + NAME_SIZE - 2] = '\0';
 		to_load.file_names[name_we_are_up_to* NAME_SIZE + NAME_SIZE - 2] = '\0';
 		clean_name(&to_load.file_names[(name_we_are_up_to) * NAME_SIZE]);
 		to_load.file_offsets[name_we_are_up_to] = file_location;
@@ -368,18 +384,33 @@ int get_file_from_name(char * dir_to_list)
 	{
 		dir_to_list[strlen(dir_to_list) - 1] = 0;
 	}
-	//create padded name to allow comparisons
 	//test if it's empty
-	if(dir_to_list[0] =='\0') return -2;
+	if(dir_to_list[0] =='\0') return -2; 
+	//create padded name to allow comparisons
 	char dir_name[NAME_SIZE];
 	for(int i = 0; i < NAME_SIZE; i++) dir_name[i] = '\0';
 	strcpy(dir_name, dir_to_list);
 	for(int i = 0; i < NAME_SIZE; i++) dir_name[i] = toupper(dir_name[i]);
+	
+	int end = strlen(dir_name);
+	int end_index = end -1;
+	int j = 0; //find the index of the dot
+	for(j = end-1; dir_name[j] != '.' && j > 0; j--);
+	int is_directory = end_index == j;//it ends in a dot = it's a directory i.e. "." or ".."
+	if(!is_directory) if (strstr(dir_to_list, ".") == NULL) is_directory = 1; //if it has no dots, it's a directory
+	
 	for(int name_start = 0; curr_dir.file_names[name_start] != '\0'; name_start += NAME_SIZE){
+		// printf("NAME IN DIR = %s, INPUT NAME = %s\nSIZES: %lu:%lu\n",&curr_dir.file_names[name_start], dir_name, strlen(&curr_dir.file_names[name_start]), strlen(dir_name));
+		
+		if((end - j < 4) && !is_directory){
+			for(int h = 0; h < (3 - (end_index - j)); h++) dir_name[end + h] = ' ';
+		}
+
 		if (strncmp(&curr_dir.file_names[name_start], dir_name, NAME_SIZE) == 0){
 			return curr_dir.file_offsets[name_start / NAME_SIZE];
 		}
 	}
+
 	return -1;
 	
 }
