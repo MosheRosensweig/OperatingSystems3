@@ -89,7 +89,7 @@ temp_file * get_file(unsigned char * source, int fat_start);
 int find_byte(temp_file * dummy_file, int cluster_num, int offset_left);
 // temp_file * traverse_fat(unsigned char * source, int fat_start, temp_file (*start_function)(void), void (*step_function)(temp_file *, int));
 loaded_directory load_directory(int dir_start);
-void write_dir_entry(char * file_name, int num_bytes, long int pointer);
+int write_dir_entry(char * file_name, int num_bytes, long int pointer);
 int read_int(int num_bytes, int offset, unsigned char * source);
 int get_file_start(int dir_location, loaded_directory dir);
 void clean_name(char * name_to_clean);
@@ -418,6 +418,32 @@ int zero_out_cluster_and_add_to_free(temp_file * dummy, int cluster_location, in
 temp_file * dummy_func(){
 	return (temp_file*) NULL;
 }
+temp_file * store_offset()
+{
+	temp_file * start_file = calloc(1, sizeof(temp_file));
+	start_file->size = 0;
+	return start_file;
+}
+int fill_file(temp_file *modifier, int current_cluster, int goal_bytes)
+{
+	char * toWrite = "New File.\r\n";
+	// int length = strlen()
+	int start_val = info.first_cluster + ((current_cluster - 2) * info.cluster_size);
+	int i = 0;
+	for (i = start_val; i < start_val + (info.BPB_BytesPerSec * info.BPB_SecPerClus) &&  modifier->size < goal_bytes; i++)
+	{
+		file_map[i] = toWrite[modifier->size % 11];
+		modifier->size++;
+		//11 is size of toWrite
+	}
+	if (modifier->size == goal_bytes)
+	{
+		file_map[i - 1] = '\0';
+		printf("%x\n", i);
+		return -1;
+	}
+	return goal_bytes;
+}
 temp_file * traverse_fat(unsigned char * source, int fat_start, temp_file *(*start_function)(), int (*step_function)(temp_file *, int, int), int goal_offset)
 {
 	printf("this is the start %d\n", fat_start);
@@ -597,15 +623,15 @@ int get_file_size(int file_cur_dir_offset)
 */
 void volume()
 {
-	// //According to the specs, at offset 71 or 0x47, is the volLab (I assume means volume lable) - it's 11 bytes
-	// char volLab[12];
-	// volLab[11] = '\0';
-	// strncpy(volLab, file_map+71, 11);
-	// if (strcmp(volLab, "NO NAME    ") == 0)
-	// {
-	// 	fprintf(stderr, "Error: volume name not found\n");
-	// }
-	// printf("Volume label is: %s\n", volLab);
+	//According to the specs, at offset 71 or 0x47, is the volLab (I assume means volume lable) - it's 11 bytes
+	char volLab[12];
+	volLab[11] = '\0';
+	strncpy(volLab, (char *) file_map+71, 11);
+	if (strcmp(volLab, "NO NAME    ") == 0)
+	{
+		fprintf(stderr, "Error: volume name not found\n");
+	}
+	printf("Volume label is: %s\n", volLab);
 
 }
 char * delete_leading_spaces(char * item)
@@ -744,10 +770,11 @@ void make_file(char * file_name, int num_bytes)
 	// memcpy(&file_map[20], &fileFatStartHi, 2);
 	// memcpy(&file_map[26], &fileFatStartLo, 2);
 	// memcpy(&file_map[28], &num_bytes, 4);
-	write_dir_entry(file_name, num_bytes, space->pointer);
+	int fat_start = write_dir_entry(file_name, num_bytes, space->pointer);
 	curr_dir = load_directory(curr_dir.fat_start);
+	traverse_fat(file_map, fat_start ,store_offset, fill_file, num_bytes);
 }
-void write_dir_entry(char * file_name, int num_bytes, long int pointer)
+int write_dir_entry(char * file_name, int num_bytes, long int pointer)
 {
 	printf("%lx\n", pointer);
 	char found = 0;
@@ -782,8 +809,9 @@ void write_dir_entry(char * file_name, int num_bytes, long int pointer)
 	//used https://stackoverflow.com/questions/1442116/how-to-get-the-date-and-time-values-in-a-c-program
 	time_t tim = time(NULL);
 	struct tm tm = *localtime(&tim);
+	printf("%d/%d/%d %d:%d:%d\n",(tm.tm_mon + 1),tm.tm_mday, (tm.tm_year - 80), tm.tm_hour,tm.tm_min, tm.tm_sec );
 	int create_time = (tm.tm_sec >> 1) + (tm.tm_min << 5) + (tm.tm_hour << 11);
-	int create_date = tm.tm_mday + (tm.tm_mon << 5) + ((tm.tm_year - 80) << 9);
+	int create_date = tm.tm_mday + ((tm.tm_mon + 1) << 5) + ((tm.tm_year - 80) << 9);
 	memcpy(&file_map[pointer + 14], &create_time, 2);
 	memcpy(&file_map[pointer + 16], &create_date, 2);
 	memcpy(&file_map[pointer + 18], &create_date, 2);
@@ -811,6 +839,7 @@ void write_dir_entry(char * file_name, int num_bytes, long int pointer)
 	printf("hi:%x lo:%x\n",fileFatStartHi, fileFatStartLo);
 	printf("%x\n", fileFatStart);
 	printf("later mapped 0x%x\n", file_map[1049851]);
+	return fileFatStart;
 }
 void copyTwo(int start_address, unsigned int data)
 {
