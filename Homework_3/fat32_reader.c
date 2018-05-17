@@ -567,25 +567,8 @@ int add_cluster(temp_file * file_so_far, int cluster_num, int dummy_var)
 void read_file(char * file_name, int start, int num_bytes)
 {
 
-	// char file_name_to_read[NAME_SIZE];
-	// for(int i = 0; i < NAME_SIZE; i++) file_name_to_read[i] = '\0';
-	// // file_name = delete_leading_spaces(file_name);
-	// printf("--%s-- --%s-- --%d--\n", file_name_to_read, file_name, (int) (strchr(file_name, ' ') - file_name));
-	// strncpy(file_name_to_read, file_name, (int) (strchr(file_name, ' ') - file_name));
-	// printf("--%s-- --%s-- --%d--\n", file_name_to_read, file_name, (int) (strchr(file_name, ' ') - file_name));
 	int file_cur_dir_offset = get_file_from_name(file_name);
-	// printf("file_name:%s: file_offset:%x:\n",file_name,file_cur_dir_offset );
-	// if(file_cur_dir_offset < 0)
-	// {
-	// 	printf("Error: No File with that name\n");
-	// 	return;
-	// }
-	// else if (strchr(file_name, '.') ==0 || strchr(file_name, '.') == file_name){
-	// 	printf("Error: That is a directory not a file\n");
-	// 	return;
-	// }
-	// int file_size = get_file_size(file_cur_dir_offset);
-	// printf("%d\n", file_size);
+
 	int file_size = check_and_get_file_size(file_name, file_cur_dir_offset);
 	if (file_size == -1)
 	{
@@ -644,13 +627,7 @@ temp_file * hack_temp_file_to_store_results()
 	hacked_file->size = -1;
 	return hacked_file;
 }
-/*
-  Description: In the current directory, create a new file with the given name (8+3 name will be specified. 
-  Also initialize it to the given size by assigning it clusters that are currently free on the FAT.
-  Make sure the directory entry reflects the assigned size. 
-  The contents of your newly created file should be the string “New File.\r\n” repeated over and over.
-  (\r\n stands for the Microsoft newline character sequence).
-*/
+
 int find_space_in_directory(temp_file * hacked_file, int current_clus, int dummy)
 {
 	int start_val = info.first_cluster + ((current_clus - 2) * info.cluster_size);
@@ -674,6 +651,14 @@ int find_space_in_directory(temp_file * hacked_file, int current_clus, int dummy
 	hacked_file->size = current_clus;
 	return 0;
 }
+
+/*
+  Description: In the current directory, create a new file with the given name (8+3 name will be specified. 
+  Also initialize it to the given size by assigning it clusters that are currently free on the FAT.
+  Make sure the directory entry reflects the assigned size. 
+  The contents of your newly created file should be the string “New File.\r\n” repeated over and over.
+  (\r\n stands for the Microsoft newline character sequence).
+*/
 void make_file(char * file_name, int num_bytes)
 {
 	/**
@@ -695,11 +680,7 @@ void make_file(char * file_name, int num_bytes)
 	  4] Iterate throught the list of clusters and write “New File.\r\n” as many times as needed
 	  5] Done
 	*/
-	// int endOfFileName = strlen(file_name);
-	// if (file_name[endOfFileName - 4] != '.')
-	// {
-	// 	fprintf(stderr, "%s\n", );
-	// }
+
 	temp_file * space = traverse_fat(file_map, curr_dir.fat_start, hack_temp_file_to_store_results,find_space_in_directory , 0);
 	//this tells us if we never found a free space
 	
@@ -712,7 +693,6 @@ void make_file(char * file_name, int num_bytes)
 		if (info.BPB_NumFATS >= 2) memcpy(&file_map[fat_beginning2 + space->size * 4], &new_space, 4);
 		space->pointer = info.first_cluster + ((new_space - 2) * info.cluster_size);
 		space->num_clusters = 1;
-		// int * 
 		//set the two new locations to be acceptable last values in the fat
 		//set the two fats to point to this new location
 	}
@@ -721,52 +701,7 @@ void make_file(char * file_name, int num_bytes)
 	{
 		file_map[space->pointer + 32] = 0;
 	}
-	//copy over the first 8 chars padding with spaces
-	// char found = 0;
-	// for (int i = 0; i < 8; i++)
-	// {
-	// 	if (file_name[i] == '.')
-	// 	{
-	// 		found = 1;
-	// 	}
-	// 	if (found)
-	// 	{
-	// 		file_map[space->pointer + i] = ' ';	
-	// 	}
-	// 	else{
-	// 		file_map[space->pointer + i] = toupper(file_name[i]);	
-	// 	}
-	// }
-	// //write extention
-	// int end = strlen(file_name);
-	// for (int i = 0; i < 3; i++)
-	// {
-	// 	file_map[space->pointer + 8 + i] = toupper(file_name[end - 3 + i]);
-	// }
-	// for (int i = 0; i < 11; ++i)
-	// {
-	// 	fprintf(stderr, "--%c--\n", file_map[space->pointer + i]);
-	// }
 
-	// file_map[space->pointer + 11] = 0x20;
-	// file_map[space->pointer + 12] = 0x00;
-	// file_map[space->pointer + 13] = 0x00;
-	// //used https://stackoverflow.com/questions/1442116/how-to-get-the-date-and-time-values-in-a-c-program
-	// time_t tim = time(NULL);
-	// struct tm tm = *localtime(&tim);
-	// int create_time = (tm.tm_sec >> 1) + (tm.tm_min << 5) + (tm.tm_hour << 11);
-	// int create_date = tm.tm_mday + (tm.tm_mon << 5) + ((tm.tm_year - 80) << 9);
-	// memcpy(&file_map[14], &create_time, 2);
-	// memcpy(&file_map[16], &create_date, 2);
-	// memcpy(&file_map[18], &create_date, 2);
-	// memcpy(&file_map[22], &create_time, 2);
-	// memcpy(&file_map[24], &create_date, 2);
-	// int fileFatStart = allocate_space(num_bytes / (info.BPB_BytesPerSec * info.BPB_SecPerClus) + !!(num_bytes % (info.BPB_BytesPerSec * info.BPB_SecPerClus)));
-	// unsigned int fileFatStartHi = (fileFatStart & 0xFFFF0000) >> 16;
-	// unsigned int fileFatStartLo = (fileFatStart & 0x0000FFFF);
-	// memcpy(&file_map[20], &fileFatStartHi, 2);
-	// memcpy(&file_map[26], &fileFatStartLo, 2);
-	// memcpy(&file_map[28], &num_bytes, 4);
 	int fat_start = write_dir_entry(file_name, num_bytes, space->pointer);
 	if (fat_start == -1)
 	{
@@ -778,7 +713,6 @@ void make_file(char * file_name, int num_bytes)
 }
 int write_dir_entry(char * file_name, int num_bytes, long int pointer)
 {
-	// printf("%lx\n", pointer);
 	char found = 0;
 	for (int i = 0; i < 8; i++)
 	{
@@ -794,21 +728,6 @@ int write_dir_entry(char * file_name, int num_bytes, long int pointer)
 			file_map[pointer + i] = toupper(file_name[i]);	
 		}
 	}
-	//write extention
-	// int end = strlen(file_name);
-	// char * lastDot = strrchr(file_name, '.');
-	// lastDot++;
-	// int counter = 0;
-	// found = 0;
-	// for (char * i = lastDot; i < file_name + end; i++)
-	// {
-	// 	file_map[pointer + 8 + counter] = toupper(*i);
-	// 	counter++;
-	// 	if (counter >= 3)
-	// 	{
-	// 		return -1;
-	// 	}
-	// }
 
 	//write extention
 	found = 0;
@@ -839,7 +758,6 @@ int write_dir_entry(char * file_name, int num_bytes, long int pointer)
 	//used https://stackoverflow.com/questions/1442116/how-to-get-the-date-and-time-values-in-a-c-program
 	time_t tim = time(NULL);
 	struct tm tm = *localtime(&tim);
-	// printf("%d/%d/%d %d:%d:%d\n",(tm.tm_mon + 1),tm.tm_mday, (tm.tm_year - 80), tm.tm_hour,tm.tm_min, tm.tm_sec );
 	int create_time = (tm.tm_sec >> 1) + (tm.tm_min << 5) + (tm.tm_hour << 11);
 	int create_date = tm.tm_mday + ((tm.tm_mon + 1) << 5) + ((tm.tm_year - 80) << 9);
 	memcpy(&file_map[pointer + 14], &create_time, 2);
@@ -850,27 +768,16 @@ int write_dir_entry(char * file_name, int num_bytes, long int pointer)
 	int fileFatStart = allocate_space(num_bytes / (info.BPB_BytesPerSec * info.BPB_SecPerClus) + !!(num_bytes % (info.BPB_BytesPerSec * info.BPB_SecPerClus)));
 	unsigned int fileFatStartHi = (fileFatStart & 0xFFFF0000) >> 16;
 	unsigned int fileFatStartLo = (fileFatStart & 0x0000FFFF);
-	// char fileFatStartHi2 = (fileFatStartHi) & 0xff;
-	// char fileFatStartHi21 = (fileFatStartHi >> 8) & 0xff;
-	// char fileFatStartLo2 = (fileFatStartLo) & 0xff;
-	// char fileFatStartLo21 = (fileFatStartLo >> 8) & 0xff;
-
-	// file_map[pointer + 26] = fileFatStartLo2;
-	// file_map[pointer + 27] = fileFatStartLo21;
-	// file_map[pointer + 20] = fileFatStartHi2;
-	// file_map[pointer + 21] = fileFatStartHi21;
 
 	copyTwo(pointer + 20, fileFatStartHi);
 	copyTwo(pointer + 26, fileFatStartLo);
-	// memcpy(&file_map[pointer + 20], &fileFatStartHi, 2);
-	// memcpy(&file_map[pointer + 26], &fileFatStartLo, 2);
+
 	memcpy(&file_map[pointer + 28], &num_bytes, 4);
 	return fileFatStart;
 }
 void copyTwo(int start_address, unsigned int data)
 {
-	// unsigned int * tempMap = (unsigned int *) file_map;
-	// file_map[]
+
 	file_map[start_address] = 0;
 	file_map[start_address + 1] = 0;
 	file_map[start_address] = (unsigned char) (data & 0xff);
@@ -899,7 +806,6 @@ int allocate_space(int numOfClusters)
 			ret = newClusNum;
 		}
 		prev = newClusNum;
-		/* code */
 	}
 	memset(&file_map[fat_beginning + newClusNum * 4], 0xFF, 4);
 	if (info.BPB_NumFATS >= 2) memset(&file_map[fat_beginning2 + newClusNum * 4], 0xFF, 4);
@@ -980,12 +886,6 @@ int main(int argc, char *argv[])
 		else if(strncmp(cmd_line,"volume",6)==0) {
 			volume();
 		}
-		// else if(strncmp(cmd_line,"open",4)==0) {
-		// 	int temp_int;
-		// 	scanf("%x", &temp_int);
-		// 	temp_file * temp = get_file(file_map , temp_int);	
-		// 	printf("%s 0x%x %d\n", temp->meat, read_int(4, 0, temp->meat), read_int(4, 0, temp->meat));
-		// }
 
 		else if(strncmp(cmd_line,"cd",2)==0) {
 			changeDirectory(&cmd_line[3]);
@@ -1012,7 +912,6 @@ int main(int argc, char *argv[])
 				fprintf(stderr, "%s\n", "Error: please enter correct parameters for newfile");
 				continue;
 			}
-			printf("%d\n", test);
 			make_file(file_name, num_bytes);
 		}
 		else if(strncmp(cmd_line,"read",4)==0) {
@@ -1028,7 +927,6 @@ int main(int argc, char *argv[])
 				continue;
 			}
 
-			printf("%d\n", test);
 			read_file(file_name, position, num_bytes);
 		}
 		
