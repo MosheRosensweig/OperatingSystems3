@@ -404,7 +404,7 @@ int zero_out_cluster_and_add_to_free(temp_file * dummy, int cluster_location, in
 	int fat_beginning = info.BPB_RsvdSecCnt * info.BPB_BytesPerSec;
 	int fat_beginning2 = fat_beginning + info.BPB_FATSz32 * 4;
 	push_free_list(cluster_location, free_clusters);
-	printf("overwriteing: Ox%x and : 0x%x\n",fat_beginning + cluster_location * 4,  fat_beginning2 + cluster_location * 4);
+	// printf("overwriteing: Ox%x and : 0x%x\n",fat_beginning + cluster_location * 4,  fat_beginning2 + cluster_location * 4);
 	memset(&file_map[fat_beginning + cluster_location * 4], 0, 4);
 	if (info.BPB_NumFATS >= 2) memset(&file_map[fat_beginning2 + cluster_location * 4], 0, 4);
 	return 0;
@@ -433,14 +433,14 @@ int fill_file(temp_file *modifier, int current_cluster, int goal_bytes)
 	if (modifier->size == goal_bytes)
 	{
 		file_map[i - 1] = '\0';
-		printf("%x\n", i);
+		// printf("%x\n", i);
 		return -1;
 	}
 	return goal_bytes;
 }
 temp_file * traverse_fat(unsigned char * source, int fat_start, temp_file *(*start_function)(), int (*step_function)(temp_file *, int, int), int goal_offset)
 {
-	printf("this is the start %d\n", fat_start);
+	// printf("this is the start %d\n", fat_start);
 	temp_file * new_file = start_function();
 	//finds first fat entry byte number (4 bytes per entry) i.e the begging of the FAT linked list 
 	// long int start_entry = info.BPB_RsvdSecCnt * info.BPB_BytesPerSec + fat_start * 4;
@@ -452,7 +452,7 @@ temp_file * traverse_fat(unsigned char * source, int fat_start, temp_file *(*sta
 	while(next_cluster && 2 <= next_cluster && next_cluster <= 0x0FFFFFEF ){
 		tmp_cluster = next_cluster;
 		next_cluster = (read_int(4, tmp_cluster * 4 + fat_beginning, source) & 0x0FFFFFFF);
-		printf("\nthis is the step input: tmp_cluster: %d goal_offset: %d\n",tmp_cluster, goal_offset);
+		// printf("\nthis is the step input: tmp_cluster: %d goal_offset: %d\n",tmp_cluster, goal_offset);
 		goal_offset = step_function(new_file, tmp_cluster, goal_offset);
 		if (goal_offset == -1)
 		{
@@ -460,7 +460,7 @@ temp_file * traverse_fat(unsigned char * source, int fat_start, temp_file *(*sta
 		}
 		//might be an off by one error
 		//maybe print whole table
-		printf("next_cluster is %d, tmp_cluster is %d\n", next_cluster, tmp_cluster);
+		// printf("next_cluster is %d, tmp_cluster is %d\n", next_cluster, tmp_cluster);
 	}
 	if (next_cluster != 0 && next_cluster < 0x0FFFFFF8)
 	{
@@ -537,21 +537,19 @@ int check_and_get_file_size(char * file_name, int file_cur_dir_offset)
 }
 int find_byte(temp_file * dummy_file, int cluster_num, int offset_left)
 {
-	printf("offset_left %x cluster_num %d\n",offset_left, cluster_num );
+	// printf("offset_left %x cluster_num %d\n",offset_left, cluster_num );
 	if (offset_left > (info.cluster_size))
 	{
 		return offset_left - (info.cluster_size);
 	}
 	else{
-		printf("yay\n");
 		file_map[info.first_cluster + ((cluster_num - 2) * info.cluster_size) + offset_left] = 0xE5;
 		return -1;
 	}
 }
 int add_cluster(temp_file * file_so_far, int cluster_num, int dummy_var)
 { 
-	printf("later mapped 0x%x\n", file_map[1049851]);
-	printf("mapping + %d \n", info.first_cluster + ((cluster_num - 2) * info.cluster_size));
+	// printf("mapping + %d \n", info.first_cluster + ((cluster_num - 2) * info.cluster_size));
 	//first cluster is called cluster 2
 	memcpy(&file_so_far->meat[file_so_far->pointer], &file_map[info.first_cluster + ((cluster_num - 2) * info.cluster_size)], info.cluster_size);
 	//growing the arraylist
@@ -780,7 +778,7 @@ void make_file(char * file_name, int num_bytes)
 }
 int write_dir_entry(char * file_name, int num_bytes, long int pointer)
 {
-	printf("%lx\n", pointer);
+	// printf("%lx\n", pointer);
 	char found = 0;
 	for (int i = 0; i < 8; i++)
 	{
@@ -817,9 +815,7 @@ int write_dir_entry(char * file_name, int num_bytes, long int pointer)
 	int end = strlen(file_name);
 	int j = 0; //find the index of the dot
 	for(j = end-1; file_name[j] != '.' && j > 0; j--);
-	printf("j is%d end is%d\n",j, end );
 	if(j < 0 || j <= end-5) return -1; //make sure the input is correct otherwise fail
-	printf("j is%d end is%d\n",j, end );
 	for (int i = 0; i < 3; i++)
 	{
 		if (i == (end -1 - j))
