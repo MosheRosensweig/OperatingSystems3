@@ -30,7 +30,7 @@
 /* This is the main function of your project, and it will be run
  * first before all other functions.
  */
-static char *file_map;
+static unsigned char *file_map;
 typedef struct fat_info{
 	int BPB_BytesPerSec;
 	int BPB_SecPerClus;
@@ -45,7 +45,7 @@ typedef struct temp_file{
 	int num_clusters;
 	long int pointer;
 	long int size;
-	char * meat;
+	unsigned char * meat;
 } temp_file;
 fat_info info;
 typedef struct loaded_directory{
@@ -75,7 +75,7 @@ static int NAME_SIZE = 13;
 void initilize(char * file_path);
 int allocate_space(int numOfClusters);
 void print_freelist_info();
-int read_int(int num_bytes, int offset, char * source);
+int read_int(int num_bytes, int offset, unsigned char * source);
 void print_info();
 void make_file(char * file_name, int num_bytes);
 void copyTwo(int start_address, unsigned int data);
@@ -85,20 +85,20 @@ int add_cluster(temp_file * file_so_far, int cluster_num, int dummy_var);
 void load_curr_directory(int dir_start, int first, int size);
 void get_current_dir_list(char * directory);
 int get_file_from_name(char * dir_to_list);
-temp_file * get_file(char * source, int fat_start);
+temp_file * get_file(unsigned char * source, int fat_start);
 int find_byte(temp_file * dummy_file, int cluster_num, int offset_left);
-// temp_file * traverse_fat(char * source, int fat_start, temp_file (*start_function)(void), void (*step_function)(temp_file *, int));
+// temp_file * traverse_fat(unsigned char * source, int fat_start, temp_file (*start_function)(void), void (*step_function)(temp_file *, int));
 loaded_directory load_directory(int dir_start);
-void write_dir_entry(char * file_name, int num_bytes, int pointer);
-int read_int(int num_bytes, int offset, char * source);
+void write_dir_entry(char * file_name, int num_bytes, long int pointer);
+int read_int(int num_bytes, int offset, unsigned char * source);
 int get_file_start(int dir_location, loaded_directory dir);
 void clean_name(char * name_to_clean);
 int get_file_size(int file_cur_dir_offset);
 char * delete_leading_spaces(char * item);
 void push_free_list(int to_push, free_list * push_list);
-free_list * init_free_list(char * source, int fat_start, int fat_size);
+free_list * init_free_list(unsigned char * source, int fat_start, int fat_size);
 temp_file * dummy_func();
-temp_file * traverse_fat(char * source, int fat_start, temp_file *(*start_function)(), int (*step_function)(temp_file *, int, int), int goal_offset);
+temp_file * traverse_fat(unsigned char * source, int fat_start, temp_file *(*start_function)(), int (*step_function)(temp_file *, int, int), int goal_offset);
 int zero_out_cluster_and_add_to_free(temp_file * dummy, int cluster_location, int dummy_var);
 void initilize(char * file_path)
 {
@@ -126,7 +126,7 @@ void initilize(char * file_path)
 	curr_dir = load_directory(read_int(4, 44, file_map));
 	free_clusters = init_free_list(file_map, info.BPB_RsvdSecCnt * info.BPB_BytesPerSec, info.BPB_FATSz32 * info.BPB_BytesPerSec / 4);
 }
-free_list * init_free_list(char * source, int fat_start, int fat_size)
+free_list * init_free_list(unsigned char * source, int fat_start, int fat_size)
 {
 	free_list * new_list = calloc(1, sizeof(free_list));
 	new_list->list = calloc(fat_size, sizeof(int));
@@ -219,6 +219,7 @@ loaded_directory load_directory(int dir_start)
 	
 	//extra one for null terminator
 	to_load.directory = get_file(file_map, dir_start);
+	printf("offset after loading %x\n",to_load.directory->meat[251] );
 	// this is how many files can fit in the number of clusters we have
 	//leave one extra space for null termination
 	int number_of_files = (info.cluster_size/32) * to_load.directory->num_clusters + 1;
@@ -349,12 +350,19 @@ void delete_file(char * file_name)
 //dir 			= directory it is stored in
 int get_file_start(int dir_location, loaded_directory dir)
 {
+	printf("stat after getting start %x\n",curr_dir.directory->meat[251] );
+	printf("stat after getting start %x\n",dir.directory->meat[251] );
+	printf("dir_location %d\n", dir_location);
+	printf("gfs later mapped 0x%x\n", file_map[1049851]);
+	printf("dir_location + 20 is: %d\n", dir_location + 20);
 	int clus_start = 0;
 	//first read high and mask off first 2 bytes because the addresses are only 28 bit
 	clus_start = dir.directory->meat[dir_location + 20] & 0xFF;
+	clus_start = (dir.directory->meat[dir_location + 21] & 0xFF ) << 8;
 	clus_start <<= 16;
 	//then read low
-	clus_start |= dir.directory->meat[dir_location + 26] & 0xFFFF;
+	clus_start |= dir.directory->meat[dir_location + 26] & 0xFF;
+	clus_start |= (dir.directory->meat[dir_location + 27] & 0xFF) << 8;
 	return clus_start;
 }
 int get_file_from_name(char * dir_to_list)
@@ -381,7 +389,7 @@ int get_file_from_name(char * dir_to_list)
 	return -1;
 	
 }
-int read_int(int num_bytes, int offset, char * source)
+int read_int(int num_bytes, int offset, unsigned char * source)
 {
 	int test = 0;
 	memcpy(&test, &file_map[offset], num_bytes);
@@ -410,7 +418,7 @@ int zero_out_cluster_and_add_to_free(temp_file * dummy, int cluster_location, in
 temp_file * dummy_func(){
 	return (temp_file*) NULL;
 }
-temp_file * traverse_fat(char * source, int fat_start, temp_file *(*start_function)(), int (*step_function)(temp_file *, int, int), int goal_offset)
+temp_file * traverse_fat(unsigned char * source, int fat_start, temp_file *(*start_function)(), int (*step_function)(temp_file *, int, int), int goal_offset)
 {
 	printf("this is the start %d\n", fat_start);
 	temp_file * new_file = start_function();
@@ -448,12 +456,12 @@ temp_file * traverse_fat(char * source, int fat_start, temp_file *(*start_functi
 	}
 	return new_file;
 }
-temp_file * get_file(char * source, int fat_start)
+temp_file * get_file(unsigned char * source, int fat_start)
 {
 	return traverse_fat(source, fat_start, initilize_temp_file, add_cluster, 0);
 }
 /*
-temp_file * get_file(char * source, int fat_start, (temp_file *) start_function(void), void *step_function(temp_file *, int))
+temp_file * get_file(unsigned char * source, int fat_start, (temp_file *) start_function(void), void *step_function(temp_file *, int))
 {
 	temp_file * new_file = initilize_temp_file();
 	//finds first fat entry byte number (4 bytes per entry) i.e the begging of the FAT linked list 
@@ -522,6 +530,8 @@ int find_byte(temp_file * dummy_file, int cluster_num, int offset_left)
 }
 int add_cluster(temp_file * file_so_far, int cluster_num, int dummy_var)
 { 
+	printf("later mapped 0x%x\n", file_map[1049851]);
+	printf("mapping + %d \n", info.first_cluster + ((cluster_num - 2) * info.cluster_size));
 	//first cluster is called cluster 2
 	memcpy(&file_so_far->meat[file_so_far->pointer], &file_map[info.first_cluster + ((cluster_num - 2) * info.cluster_size)], info.cluster_size);
 	//growing the arraylist
@@ -587,15 +597,15 @@ int get_file_size(int file_cur_dir_offset)
 */
 void volume()
 {
-	//According to the specs, at offset 71 or 0x47, is the volLab (I assume means volume lable) - it's 11 bytes
-	char volLab[12];
-	volLab[11] = '\0';
-	strncpy(volLab, file_map+71, 11);
-	if (strcmp(volLab, "NO NAME    ") == 0)
-	{
-		fprintf(stderr, "Error: volume name not found\n");
-	}
-	printf("Volume label is: %s\n", volLab);
+	// //According to the specs, at offset 71 or 0x47, is the volLab (I assume means volume lable) - it's 11 bytes
+	// char volLab[12];
+	// volLab[11] = '\0';
+	// strncpy(volLab, file_map+71, 11);
+	// if (strcmp(volLab, "NO NAME    ") == 0)
+	// {
+	// 	fprintf(stderr, "Error: volume name not found\n");
+	// }
+	// printf("Volume label is: %s\n", volLab);
 
 }
 char * delete_leading_spaces(char * item)
@@ -737,8 +747,9 @@ void make_file(char * file_name, int num_bytes)
 	write_dir_entry(file_name, num_bytes, space->pointer);
 	curr_dir = load_directory(curr_dir.fat_start);
 }
-void write_dir_entry(char * file_name, int num_bytes, int pointer)
+void write_dir_entry(char * file_name, int num_bytes, long int pointer)
 {
+	printf("%lx\n", pointer);
 	char found = 0;
 	for (int i = 0; i < 8; i++)
 	{
@@ -791,21 +802,33 @@ void write_dir_entry(char * file_name, int num_bytes, int pointer)
 	// file_map[pointer + 20] = fileFatStartHi2;
 	// file_map[pointer + 21] = fileFatStartHi21;
 
-	// copyTwo(pointer + 20, fileFatStartHi);
-	// copyTwo(pointer + 26, fileFatStartLo);
-	memcpy(&file_map[pointer + 20], &fileFatStartHi, 2);
-	memcpy(&file_map[pointer + 26], &fileFatStartLo, 2);
+	copyTwo(pointer + 20, fileFatStartHi);
+	copyTwo(pointer + 26, fileFatStartLo);
+	// memcpy(&file_map[pointer + 20], &fileFatStartHi, 2);
+	// memcpy(&file_map[pointer + 26], &fileFatStartLo, 2);
+	printf("data on drive 3 %x\n", file_map[pointer + 21]);
 	memcpy(&file_map[pointer + 28], &num_bytes, 4);
 	printf("hi:%x lo:%x\n",fileFatStartHi, fileFatStartLo);
 	printf("%x\n", fileFatStart);
+	printf("later mapped 0x%x\n", file_map[1049851]);
 }
 void copyTwo(int start_address, unsigned int data)
 {
+	// unsigned int * tempMap = (unsigned int *) file_map;
+	// file_map[]
+	printf("%x\n", data);
 	file_map[start_address] = 0;
 	file_map[start_address + 1] = 0;
-	file_map[start_address] = (char) data;
+	printf("here is data %x here is address\n",  (unsigned char) (data & 0xff));
+	printf("start_address %x\n", start_address + 1);
+	file_map[start_address] = (unsigned char) (data & 0xff);
+	printf("here is data on drive%x\n",(unsigned char) file_map[start_address]);
 	data = data >> 8;
-	file_map[start_address + 1] = (char) data;
+
+	file_map[start_address + 1] = (unsigned char) (data & 0xff);
+	printf("here is data 2 0x%x\n",(unsigned char) (data & 0xff));
+	printf("here is data on drive2 0x%x\n",file_map[start_address + 1]);
+	printf("start address is: %d\n", start_address);
 }
 int allocate_space(int numOfClusters)
 {
@@ -837,8 +860,11 @@ int allocate_space(int numOfClusters)
 }
 void print_stat(char * dir_name)
 {
+	printf("stat later mapped 0x%x\n", file_map[1049851]);
+	printf("stat after loading %x\n",curr_dir.directory->meat[251] );
 	int dir_to_stat;
 	dir_to_stat = get_file_from_name(dir_name);
+	printf("dir offset %x", dir_to_stat);
 	if(dir_to_stat < 0)
 	{
 		printf("Error: file/directory does not exist\n");
